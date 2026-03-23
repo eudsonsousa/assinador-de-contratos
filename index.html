@@ -7,26 +7,30 @@
     <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #f4f4f4; margin: 0; padding: 20px; }
-        .container { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 500px; margin: auto; }
-        canvas { border: 2px dashed #007bff; border-radius: 5px; background: #fff; width: 100%; height: 250px; touch-action: none; }
-        button { background: #28a745; color: white; border: none; padding: 15px; font-size: 16px; border-radius: 5px; cursor: pointer; margin-top: 10px; width: 100%; font-weight: bold; }
-        .clear-btn { background: #6c757d; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; background: #f0f2f5; margin: 0; padding: 20px; }
+        .container { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.1); max-width: 450px; margin: auto; }
+        h3 { color: #1c1e21; margin-bottom: 10px; }
+        p { color: #606770; font-size: 14px; }
+        canvas { border: 2px solid #007bff; border-radius: 8px; background: #fff; width: 100%; height: 250px; touch-action: none; margin-bottom: 15px; }
+        button { background: #28a745; color: white; border: none; padding: 16px; font-size: 16px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; transition: background 0.3s; }
+        button:disabled { background: #ccc; }
+        .clear-btn { background: #6c757d; margin-top: 10px; padding: 10px; font-size: 14px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h3>Assinatura do Colaborador</h3>
-        <p>Assine dentro do quadro azul:</p>
+        <h3>Assinatura do Contrato</h3>
+        <p>Assine no quadro abaixo para a 4ª página:</p>
         <canvas id="signature-pad"></canvas>
         <button id="save-btn">✅ FINALIZAR E BAIXAR PDF</button>
-        <button class="clear-btn" id="clear-btn">Limpar Quadro</button>
+        <button class="clear-btn" id="clear-btn">Limpar Assinatura</button>
     </div>
 
     <script>
         const canvas = document.getElementById('signature-pad');
         const signaturePad = new SignaturePad(canvas);
 
+        // Ajusta o tamanho do quadro de assinatura para o celular
         function resizeCanvas() {
             const ratio = Math.max(window.devicePixelRatio || 1, 1);
             canvas.width = canvas.offsetWidth * ratio;
@@ -41,61 +45,62 @@
 
         document.getElementById('save-btn').addEventListener('click', async () => {
             if (signaturePad.isEmpty()) {
-                alert("Por favor, faça sua assinatura.");
+                alert("Por favor, faça sua assinatura antes de continuar.");
                 return;
             }
 
             const btn = document.getElementById('save-btn');
-            btn.innerText = "Processando... aguarde";
+            const originalText = btn.innerText;
+            btn.innerText = "⏳ Gerando PDF... aguarde";
             btn.disabled = true;
 
             try {
-                // 1. Tentar carregar o PDF
-                const response = await fetch('./modelo.pdf');
-                if (!response.ok) throw new Error("Arquivo 'modelo.pdf' não encontrado!");
+                // 1. Carrega o PDF (com cache-bust para evitar versões antigas)
+                const response = await fetch('./modelo.pdf?t=' + new Date().getTime());
+                if (!response.ok) throw new Error("Não encontrei o arquivo 'modelo.pdf' na pasta.");
                 
                 const existingPdfBytes = await response.arrayBuffer();
                 const pdfDoc = await PDFLib.PDFDocument.load(existingPdfBytes);
                 const pages = pdfDoc.getPages();
 
-                // 2. Verificar se o PDF tem pelo menos 4 páginas
+                // 2. Verifica se a 4ª página existe
                 if (pages.length < 4) {
-                    throw new Error("O PDF tem apenas " + pages.length + " página(s). Não foi possível assinar na 4ª.");
+                    throw new Error("O PDF carregado tem apenas " + pages.length + " página(s). É necessário pelo menos 4.");
                 }
 
-                const targetPage = pages[3]; // [3] representa a quarta página (começa em 0)
-                const { width, height } = targetPage.getSize();
+                const targetPage = pages[3]; // Índice 3 = 4ª página
 
-                // 3. Preparar a assinatura
-                const signatureImg = signaturePad.toDataURL('image/png');
-                const signatureImage = await pdfDoc.embedPng(signatureImg);
+                // 3. Processa a imagem da assinatura
+                const signatureImgData = signaturePad.toDataURL('image/png');
+                const signatureImage = await pdfDoc.embedPng(signatureImgData);
 
-                // 4. POSICIONAMENTO (Ajuste esses números abaixo!)
-                // x: distância da esquerda | y: distância do fundo
+                // 4. POSICIONAMENTO NA 4ª PÁGINA
+                // No PDF, (0,0) é o canto inferior ESQUERDO.
                 targetPage.drawImage(signatureImage, {
-                    x: 100,      // Ajuste para alinhar com o início da linha
-                    y: 150,      // Ajuste para ficar logo ACIMA da linha
-                    width: 180,  // Largura da assinatura
-                    height: 60,  // Altura da assinatura
+                    x: 80,   // Aumente para mover para a DIREITA
+                    y: 120,  // Aumente para mover para CIMA
+                    width: 180,
+                    height: 60,
                 });
 
-                // 4. Gerar e forçar o download
+                // 5. Finaliza e inicia o download
                 const pdfBytes = await pdfDoc.save();
                 const blob = new Blob([pdfBytes], { type: "application/pdf" });
                 const url = URL.createObjectURL(blob);
                 
                 const link = document.createElement('a');
                 link.href = url;
-                link.download = "OS_Assinada.pdf";
+                link.download = "Contrato_Assinado.pdf";
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
                 
-                alert("Download iniciado! Verifique sua pasta de arquivos.");
+                alert("Sucesso! O PDF assinado foi salvo no seu aparelho.");
             } catch (err) {
-                alert("Erro: " + err.message);
+                console.error(err);
+                alert("Ocorreu um problema: " + err.message);
             } finally {
-                btn.innerText = "✅ FINALIZAR E BAIXAR PDF";
+                btn.innerText = originalText;
                 btn.disabled = false;
             }
         });
