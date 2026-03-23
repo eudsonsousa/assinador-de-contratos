@@ -27,83 +27,81 @@
     </div>
 
     <script>
-        const canvas = document.getElementById('signature-pad');
-        const signaturePad = new SignaturePad(canvas);
+    const canvas = document.getElementById('signature-pad');
+    
+    // AJUSTE AQUI: Adicionada a cor azul na caneta
+    const signaturePad = new SignaturePad(canvas, {
+        penColor: "rgb(0, 0, 255)" 
+    });
 
-        // Ajusta o tamanho do quadro de assinatura para o celular
-        function resizeCanvas() {
-            const ratio = Math.max(window.devicePixelRatio || 1, 1);
-            canvas.width = canvas.offsetWidth * ratio;
-            canvas.height = canvas.offsetHeight * ratio;
-            canvas.getContext("2d").scale(ratio, ratio);
-            signaturePad.clear();
+    function resizeCanvas() {
+        const ratio = Math.max(window.devicePixelRatio || 1, 1);
+        canvas.width = canvas.offsetWidth * ratio;
+        canvas.height = canvas.offsetHeight * ratio;
+        canvas.getContext("2d").scale(ratio, ratio);
+        signaturePad.clear();
+    }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    document.getElementById('clear-btn').addEventListener('click', () => signaturePad.clear());
+
+    document.getElementById('save-btn').addEventListener('click', async () => {
+        if (signaturePad.isEmpty()) {
+            alert("Por favor, faça sua assinatura antes de continuar.");
+            return;
         }
-        window.addEventListener("resize", resizeCanvas);
-        resizeCanvas();
 
-        document.getElementById('clear-btn').addEventListener('click', () => signaturePad.clear());
+        const btn = document.getElementById('save-btn');
+        const originalText = btn.innerText;
+        btn.innerText = "⏳ Gerando PDF... aguarde";
+        btn.disabled = true;
 
-        document.getElementById('save-btn').addEventListener('click', async () => {
-            if (signaturePad.isEmpty()) {
-                alert("Por favor, faça sua assinatura antes de continuar.");
-                return;
+        try {
+            const response = await fetch('./modelo.pdf?t=' + new Date().getTime());
+            if (!response.ok) throw new Error("Não encontrei o arquivo 'modelo.pdf' na pasta.");
+            
+            const existingPdfBytes = await response.arrayBuffer();
+            const pdfDoc = await PDFLib.PDFDocument.load(existingPdfBytes);
+            const pages = pdfDoc.getPages();
+
+            if (pages.length < 4) {
+                throw new Error("O PDF carregado tem apenas " + pages.length + " página(s). É necessário pelo menos 4.");
             }
 
-            const btn = document.getElementById('save-btn');
-            const originalText = btn.innerText;
-            btn.innerText = "⏳ Gerando PDF... aguarde";
-            btn.disabled = true;
+            const targetPage = pages[3]; 
 
-            try {
-                // 1. Carrega o PDF (com cache-bust para evitar versões antigas)
-                const response = await fetch('./modelo.pdf?t=' + new Date().getTime());
-                if (!response.ok) throw new Error("Não encontrei o arquivo 'modelo.pdf' na pasta.");
-                
-                const existingPdfBytes = await response.arrayBuffer();
-                const pdfDoc = await PDFLib.PDFDocument.load(existingPdfBytes);
-                const pages = pdfDoc.getPages();
+            // A assinatura já será capturada em azul pelo SignaturePad
+            const signatureImgData = signaturePad.toDataURL('image/png');
+            const signatureImage = await pdfDoc.embedPng(signatureImgData);
 
-                // 2. Verifica se a 4ª página existe
-                if (pages.length < 4) {
-                    throw new Error("O PDF carregado tem apenas " + pages.length + " página(s). É necessário pelo menos 4.");
-                }
+            targetPage.drawImage(signatureImage, {
+                x: 60,  
+                y: 323, 
+                width: 200,
+                height: 80,
+            });
 
-                const targetPage = pages[3]; // Índice 3 = 4ª página
-
-                // 3. Processa a imagem da assinatura
-                const signatureImgData = signaturePad.toDataURL('image/png');
-                const signatureImage = await pdfDoc.embedPng(signatureImgData);
-
-                // 4. POSICIONAMENTO NA 4ª PÁGINA
-                // No PDF, (0,0) é o canto inferior ESQUERDO.
-                targetPage.drawImage(signatureImage, {
-                    x: 60,   // Aumente para mover para a DIREITA
-                    y: 323,  // Aumente para mover para CIMA
-                    width: 200,
-                    height: 80,
-                });
-
-                // 5. Finaliza e inicia o download
-                const pdfBytes = await pdfDoc.save();
-                const blob = new Blob([pdfBytes], { type: "application/pdf" });
-                const url = URL.createObjectURL(blob);
-                
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = "Contrato_Assinado.pdf";
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                
-                alert("Sucesso! O PDF assinado foi salvo no seu aparelho.");
-            } catch (err) {
-                console.error(err);
-                alert("Ocorreu um problema: " + err.message);
-            } finally {
-                btn.innerText = originalText;
-                btn.disabled = false;
-            }
-        });
-    </script>
+            const pdfBytes = await pdfDoc.save();
+            const blob = new Blob([pdfBytes], { type: "application/pdf" });
+            const url = URL.createObjectURL(blob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = "Contrato_Assinado.pdf";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            alert("Sucesso! O PDF assinado foi salvo no seu aparelho.");
+        } catch (err) {
+            console.error(err);
+            alert("Ocorreu um problema: " + err.message);
+        } finally {
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
+    });
+</script>
 </body>
 </html>
