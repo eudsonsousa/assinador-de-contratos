@@ -52,22 +52,31 @@
             try {
                 // 1. Tentar carregar o PDF
                 const response = await fetch('./modelo.pdf');
-                if (!response.ok) throw new Error("Arquivo 'modelo.pdf' não encontrado no servidor!");
+                if (!response.ok) throw new Error("Arquivo 'modelo.pdf' não encontrado!");
                 
                 const existingPdfBytes = await response.arrayBuffer();
                 const pdfDoc = await PDFLib.PDFDocument.load(existingPdfBytes);
-                
-                // 2. Preparar a assinatura
+                const pages = pdfDoc.getPages();
+
+                // 2. Verificar se o PDF tem pelo menos 4 páginas
+                if (pages.length < 4) {
+                    throw new Error("O PDF tem apenas " + pages.length + " página(s). Não foi possível assinar na 4ª.");
+                }
+
+                const targetPage = pages[3]; // [3] representa a quarta página (começa em 0)
+                const { width, height } = targetPage.getSize();
+
+                // 3. Preparar a assinatura
                 const signatureImg = signaturePad.toDataURL('image/png');
                 const signatureImage = await pdfDoc.embedPng(signatureImg);
-                const firstPage = pdfDoc.getPages()[0];
 
-                // 3. Posicionar a assinatura (Ajuste x e y aqui se precisar)
-                firstPage.drawImage(signatureImage, {
-                    x: 50,
-                    y: 50,
-                    width: 150,
-                    height: 80,
+                // 4. POSICIONAMENTO (Ajuste esses números abaixo!)
+                // x: distância da esquerda | y: distância do fundo
+                targetPage.drawImage(signatureImage, {
+                    x: 100,      // Ajuste para alinhar com o início da linha
+                    y: 150,      // Ajuste para ficar logo ACIMA da linha
+                    width: 180,  // Largura da assinatura
+                    height: 60,  // Altura da assinatura
                 });
 
                 // 4. Gerar e forçar o download
