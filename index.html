@@ -28,7 +28,8 @@
 
     <script>
         const canvas = document.getElementById('signature-pad');
-        const signaturePad = new SignaturePad(canvas);
+        const signaturePad = new SignaturePad(canvas, {
+            penColor: "rgb(0, 0, 255)"};
 
         // Ajusta o tamanho do quadro de assinatura para o celular
         function resizeCanvas() {
